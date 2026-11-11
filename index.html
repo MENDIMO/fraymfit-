@@ -3,71 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FraymFit | Face Shape Scanner and Glasses Try-On</title>
-  <meta name="description" content="Scan your face and try glasses on live.">
-  <style>
-    * { box-sizing: border-box; }
-    html, body { width: 100%; min-height: 100%; margin: 0; }
-    iframe { display: block; width: 100%; min-height: 100vh; height: 100vh; border: 0; }
-  </style>
+  <meta http-equiv="refresh" content="0; url=./index%20.html">
+  <title>FraymFit</title>
+  <script>window.location.replace(new URL("index%20.html", window.location.href).href);</script>
 </head>
 <body>
-  <iframe id="scanner" src="./index%20.html" title="FraymFit face scanner and glasses try-on" allow="camera; autoplay"></iframe>
-  <script>
-    const frame = document.getElementById("scanner");
-    function simplifyScanner() {
-      let doc;
-      try { doc = frame.contentDocument; } catch (e) { return; }
-      if (!doc || !doc.getElementById("stage")) return;
-
-      // Disable and hide card calibration while keeping its elements for existing result code.
-      const calibButton = doc.getElementById("btn-calib");
-      if (calibButton) {
-        calibButton.hidden = true;
-        calibButton.disabled = true;
-        calibButton.onclick = null;
-      }
-      ["calib-intro", "view-calib"].forEach(id => {
-        const el = doc.getElementById(id);
-        if (el) el.hidden = true;
-      });
-
-      // Put the live size control immediately below the camera, before the frame picker.
-      const stage = doc.getElementById("stage");
-      const preview = stage.querySelector(".video-wrap");
-      const tryon = doc.getElementById("tryon-ui");
-      const sizer = tryon && tryon.querySelector(".sizer");
-      if (preview && sizer && sizer.parentElement !== stage) {
-        sizer.style.margin = "8px 0 12px";
-        preview.insertAdjacentElement("afterend", sizer);
-        sizer.classList.add("hidden");
-        const syncSizer = () => sizer.classList.toggle("hidden", tryon.classList.contains("hidden"));
-        syncSizer();
-        new MutationObserver(syncSizer).observe(tryon, { attributes: true, attributeFilter: ["class"] });
-      }
-
-      // Reuse valid measured pupil-distance samples if the result filter discarded their median.
-      const win = frame.contentWindow;
-      if (win && typeof win.renderResult === "function" && !win.__fraymfitPdFix) {
-        win.__fraymfitPdFix = true;
-        const renderResult = win.renderResult;
-        win.renderResult = function (measurements) {
-          if (measurements && measurements.pd == null) {
-            try {
-              const values = win.eval("samples.map(s => s.pd).filter(v => Number.isFinite(v) && v >= 40 && v <= 90)");
-              if (values.length) {
-                values.sort((a, b) => a - b);
-                const middle = Math.floor(values.length / 2);
-                const pd = values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2;
-                measurements = { ...measurements, pd };
-              }
-            } catch (e) {}
-          }
-          return renderResult.call(this, measurements);
-        };
-      }
-    }
-    frame.addEventListener("load", simplifyScanner);
-  </script>
+  <p>Opening the FraymFit face scanner… <a href="./index%20.html">Continue to the scanner</a></p>
 </body>
 </html>
