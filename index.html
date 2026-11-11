@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FraymFit | Free Face Shape Scanner: Find Glasses That Suit Your Face</title>
+    <meta name="description" content="Scan your face in 5 seconds to find your face shape, glasses size and the frame styles that suit you. Try frames on live. Free, private, no app to install.">
+
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+
+    <style>
+        :root { --primary: #2563eb; --dark: #0f172a; --accent: #10b981; --muted: #64748b; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { min-height: 100vh; color: var(--dark); padding: 0 14px 40px; background: radial-gradient(900px 520px at 90% -8%, #1d4ed8 0%, transparent 62%), radial-gradient(700px 420px at -10% 35%, rgba(16,185,129,.22) 0%, transparent 60%), #0b1020; }
+        .hidden { display: none !important; }
+
+        .top { max-width: 560px; margin: 0 auto; padding: 16px 4px; display: flex; align-items: center; justify-content: space-between; color: #fff; }
+        .brand { display: flex; gap: 9px; align-items: center; font-weight: 800; font-size: 1.2rem; }
+        .pill { background: rgba(16,185,129,.18); color: #6ee7b7; padding: 5px 12px; border-radius: 20px; font-size: .72rem; font-weight: 700; }
+
+        .card { background: #fff; width: 100%; max-width: 560px; margin: 0 auto; border-radius: 22px; box-shadow: 0 24px 60px rgba(0,0,0,.5); overflow: hidden; }
+        #stage { padding: 24px; }
+        #view-result { padding: 0 24px 24px; }
+        #view-calib { padding: 24px; }
+
+        .hero { background: linear-gradient(160deg, #0f172a 0%, #1e3a8a 100%); color: #fff; text-align: center; padding: 26px 22px 24px; }
+        .hero svg { width: 170px; height: auto; display: block; margin: 0 auto; }
+        .hero h1 { font-size: 1.85rem; line-height: 1.15; margin: 10px 0 8px; color: #fff; }
+        .hero h1 span { background: linear-gradient(90deg, #34d399, #60a5fa); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .hero p { color: #cbd5e1; font-size: .98rem; }
+        .scan { animation: scanY 2.4s ease-in-out infinite alternate; }
+        @keyframes scanY { from { transform: translateY(0); } to { transform: translateY(250px); } }
+        .pad { padding: 22px; }
+        .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; list-style: none; margin-bottom: 16px; }
+        .steps li { background: #f1f5f9; border-radius: 12px; padding: 12px 8px; text-align: center; font-size: .8rem; font-weight: 700; color: #334155; }
+        .steps b { display: flex; width: 28px; height: 28px; margin: 0 auto 6px; border-radius: 50%; background: var(--primary); color: #fff; align-items: center; justify-content: center; font-size: .85rem; }
+        .ticks { display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: center; margin-top: 14px; font-size: .78rem; color: var(--muted); }
+        .ticks span::before { content: "✓ "; color: var(--accent); font-weight: 800; }
+        .consent { background: #f1f5f9; border-radius: 10px; padding: 12px; font-size: .82rem; color: #334155; line-height: 1.45; }
+
+        h1 { font-size: 1.3rem; margin-bottom: 6px; }
+        p.sub { color: var(--muted); font-size: .95rem; margin-bottom: 14px; }
+
+        .btn { display: block; width: 100%; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; padding: 15px; border: 0; border-radius: 12px; font-size: 1.02rem; font-weight: 800; cursor: pointer; margin-top: 12px; text-align: center; box-shadow: 0 6px 16px rgba(37,99,235,.35); transition: transform .15s, box-shadow .15s; }
+        .btn:hover { transform: translateY(-1px); }
+        .btn.green { background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 6px 16px rgba(16,185,129,.35); }
+        .btn.ghost { background: #e2e8f0; color: var(--dark); box-shadow: none; }
+        .btn.pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(37,99,235,.55); } 70% { box-shadow: 0 0 0 14px rgba(37,99,235,0); } 100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); } }
+        a.btn { text-decoration: none; }
+        .shop-blurb { display: block; font-size: .78rem; font-weight: 400; opacity: .9; }
+
+        .video-wrap { position: relative; width: 100%; aspect-ratio: 4/3; background: #000; border-radius: 14px; overflow: hidden; margin: 12px 0; box-shadow: 0 8px 24px rgba(15,23,42,.25); }
+        video, canvas { position: absolute; inset: 0; width: 100%; height: 100%; transform: scaleX(-1); object-fit: cover; }
+        .guide-oval { position: absolute; left: 50%; top: 50%; width: 46%; height: 78%; transform: translate(-50%,-50%); border: 3px dashed rgba(255,255,255,.75); border-radius: 50%; pointer-events: none; overflow: hidden; }
+        .guide-oval::after { content: ""; position: absolute; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, #34d399, transparent); animation: sweep 2s ease-in-out infinite alternate; }
+        @keyframes sweep { from { top: 4%; } to { top: 96%; } }
+        .bar { height: 10px; background: #e2e8f0; border-radius: 6px; overflow: hidden; }
+        .bar > div { height: 100%; width: 0; background: linear-gradient(90deg, #10b981, #34d399); transition: width .15s; }
+        #status { font-size: .9rem; font-weight: 700; margin: 8px 0; color: #475569; min-height: 1.3em; }
+        #status.error { color: #dc2626; }
+
+        .picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .pick { position: relative; background: #fff; border: 2px solid #e2e8f0; border-radius: 12px; padding: 8px 4px 5px; cursor: pointer; color: #334155; font-size: .7rem; font-weight: 700; text-align: center; box-shadow: 0 2px 6px rgba(15,23,42,.06); }
+        .pick svg, .pick img { width: 100%; height: auto; display: block; }
+        .pick.rec { border-color: var(--accent); background: #ecfdf5; }
+        .pick.sel { outline: 3px solid var(--primary); }
+        .pick em { position: absolute; top: -9px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #fff; font-style: normal; font-size: .6rem; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+        .sizer { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: .8rem; color: var(--muted); }
+        .sizer input { flex: 1; }
+
+        .tints { display: flex; gap: 8px; }
+        .tint { flex: 1; border: 2px solid #e2e8f0; background: #fff; border-radius: 12px; padding: 8px 6px; cursor: pointer; font-size: .75rem; font-weight: 700; color: #334155; }
+        .tint i { display: block; width: 22px; height: 22px; border-radius: 50%; margin: 0 auto 4px; border: 1px solid #94a3b8; }
+        .tint.sel { outline: 3px solid var(--primary); }
+
+        .result-shape { font-size: 1.9rem; font-weight: 900; margin-top: 16px; background: linear-gradient(90deg, #2563eb, #10b981); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .rec-text { margin: 4px 0 14px; color: #334155; }
+        .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .tile { background: #f8fafc; border-left: 4px solid var(--primary); border-radius: 10px; padding: 10px 12px; }
+        .tile:nth-child(even) { border-left-color: var(--accent); }
+        .tile small { display: block; color: var(--muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; }
+        .tile strong { font-size: 1.02rem; }
+        .note { font-size: .75rem; color: var(--muted); margin-top: 12px; line-height: 1.4; }
+        .metrics { font-family: monospace; font-size: .7rem; color: var(--muted); margin-top: 10px; }
+
+        #snap { position: static; inset: auto; transform: none; width: 100%; height: auto; border-radius: 12px; display: block; margin: 12px 0 4px; }
+        .slrow { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: .85rem; }
+        .slrow input { flex: 1; }
+        .nudge { width: 38px; height: 38px; border: 0; background: #e2e8f0; border-radius: 8px; font-size: 1.2rem; cursor: pointer; }
+
+        .guide { max-width: 900px; margin: 40px auto 0; color: #fff; }
+        .guide h2 { font-size: 1.5rem; text-align: center; margin-bottom: 6px; }
+        .guide .lead { color: #94a3b8; text-align: center; margin: 0 auto 22px; max-width: 560px; font-size: .95rem; }
+        .shape-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+        .shape-card { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); border-radius: 16px; padding: 16px; }
+        .shape-card h3 { font-size: 1.05rem; margin-bottom: 2px; }
+        .shape-card .d { color: #6ee7b7; font-size: .78rem; font-weight: 700; margin-bottom: 6px; }
+        .shape-card .r { color: #cbd5e1; font-size: .85rem; margin-bottom: 10px; }
+        .shape-card .fr { display: flex; gap: 10px; }
+        .shape-card .fr div { flex: 1; text-align: center; font-size: .7rem; color: #cbd5e1; font-weight: 600; }
+        .shape-card .fr svg { width: 100%; height: auto; color: #6ee7b7; display: block; }
+        footer { max-width: 560px; margin: 30px auto 0; text-align: center; color: #64748b; font-size: .75rem; line-height: 1.5; }
+    </style>
+</head>
+<body>
+<div class="top"><div class="brand"><svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#10b981"/><g fill="none" stroke="#04281d" stroke-width="5" stroke-linecap="round"><rect x="8" y="24" width="20" height="16" rx="5"/><rect x="36" y="24" width="20" height="16" rx="5"/><path d="M28 30q4-3 8 0"/></g></svg> FraymFit</div><span class="pill">Free face shape scanner</span></div>
+
+<div class="card">
+    <section id="view-consent">
+        <div class="hero">
+            <svg viewBox="0 0 360 400" aria-hidden="true">
+                <ellipse cx="180" cy="205" rx="98" ry="128" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.4)" stroke-width="3"/>
+                <path d="M85 205H275M180 80V330" stroke="#10b981" stroke-width="2" stroke-dasharray="6 6" opacity=".7"/>
+                <g fill="#10b981"><circle cx="180" cy="80" r="6"/><circle cx="180" cy="330" r="6"/><circle cx="85" cy="205" r="6"/><circle cx="275" cy="205" r="6"/><circle cx="125" cy="130" r="5"/><circle cx="235" cy="130" r="5"/><circle cx="130" cy="285" r="5"/><circle cx="230" cy="285" r="5"/></g>
+                <g fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M112 182Q145 174 172 182Q174 218 142 224Q108 218 112 182Z"/>
+                    <path d="M188 182Q215 174 248 182Q252 218 218 224Q186 218 188 182Z"/>
+                    <path d="M172 188Q180 184 188 188"/><path d="M112 182L96 177"/><path d="M248 182L264 177"/>
+                </g>
+                <rect class="scan" x="80" y="78" width="200" height="5" rx="2.5" fill="#34d399" opacity=".9"/>
+            </svg>
+            <h1>Find glasses that <span>suit your face</span></h1>
+            <p>Scan your face in 5 seconds. Get your face shape, your frame size and live try-on.</p>
+        </div>
+        <div class="pad">
+            <ol class="steps">
+                <li><b>1</b>Quick scan</li>
+                <li><b>2</b>Try frames on live</li>
+                <li><b>3</b>Shop your fit</li>
+            </ol>
+            <div class="consent"><strong>Your privacy:</strong> the camera image is analysed on your own device only. No photo or video is uploaded, recorded or stored.</div>
+            <button class="btn pulse" id="btn-start">Start free scan</button>
+            <div class="ticks"><span>100% free</span><span>No app to install</span><span>No sign-up</span></div>
+        </div>
+    </section>
+
+    <section id="stage" class="hidden">
+        <h1 id="stage-title">Hold still and look straight ahead</h1>
+        <div class="video-wrap">
+            <video id="webcam" autoplay playsinline muted></video>
+            <canvas id="overlay"></canvas>
+            <div class="guide-oval" id="guide"></div>
+        </div>
+
+        <div id="scan-ui">
+            <div class="bar"><div id="bar-fill"></div></div>
+            <p id="status">Starting camera...</p>
+            <p class="note">Tip: pull hair off your forehead, remove glasses, and face a light source.</p>
+        </div>
+
+        <div id="tryon-ui" class="hidden">
+            <button class="btn ghost" id="btn-retry" style="margin-top:0;margin-bottom:14px">Scan again</button>
+            <div class="picker" id="picker"></div>
+            <div class="sizer"><span>Smaller</span><input type="range" id="size-slider" min="0.8" max="1.25" step="0.01" value="1"><span>Larger</span></div>
+            <p class="note" style="margin:14px 0 6px">Lens tint</p>
+            <div class="tints" id="tints"></div>
+        </div>
+
+        <div id="calib-intro" class="hidden">
+            <p class="note" style="margin-top:0">Use any standard bank or ID card (85.6 mm wide). Hold it flat against your forehead with the long edge level, look straight at the camera, then press Capture. The image stays on your device.</p>
+            <p id="cal-status" class="note" style="font-weight:600;color:#475569">Hold the card flat against your forehead, then press Capture.</p>
+            <button class="btn" id="btn-capture">Capture</button>
+            <button class="btn ghost" id="btn-cal-cancel">Cancel</button>
+        </div>
+    </section>
+
+    <section id="view-result" class="hidden">
+        <div class="result-shape" id="res-shape"></div>
+        <p class="rec-text" id="res-rec"></p>
+        <div class="tiles" id="res-tiles"></div>
+        <p class="metrics" id="res-metrics"></p>
+        <button class="btn" id="btn-calib" style="background:#0f172a">📏 Improve accuracy with a bank card</button>
+        <button class="btn green" id="btn-return">Show me frames in my size</button>
+        <div id="shop-box" class="hidden" style="margin-top:22px">
+            <h2 style="font-size:1.15rem;margin-bottom:4px">Want to shop frames like these?</h2>
+            <p class="sub" id="shop-sub" style="margin-bottom:6px"></p>
+            <div id="shop-links"></div>
+            <p class="note">Partner links: we may earn a commission if you buy, at no extra cost to you.</p>
+        </div>
+        <p class="note">Measurements are camera estimates (accurate to a few millimetres) and are not for prescriptions. Frames shown are sample outlines. Suggestions are a style guide, not a rule.</p>
+    </section>
+
+    <section id="view-calib" class="hidden">
+        <h1>Line up the card edges</h1>
+        <p class="sub">Slide the two yellow lines so each one touches the left and right edge of the card.</p>
+        <canvas id="snap"></canvas>
+        <div class="slrow"><b style="width:44px">Left</b><button class="nudge" data-target="cal-l" data-nudge="-1">‹</button><input type="range" id="cal-l" step="0.5"><button class="nudge" data-target="cal-l" data-nudge="1">›</button></div>
+        <div class="slrow"><b style="width:44px">Right</b><button class="nudge" data-target="cal-r" data-nudge="-1">‹</button><input type="range" id="cal-r" step="0.5"><button class="nudge" data-target="cal-r" data-nudge="1">›</button></div>
+        <p id="cal-msg" class="note" style="color:#dc2626"></p>
+        <button class="btn green" id="btn-cal-confirm">Use these measurements</button>
+        <button class="btn ghost" id="btn-cal-retake">Retake photo</button>
+    </section>
+</div>
+
+<main class="guide">
+    <h2>Which glasses suit which face shape?</h2>
+    <p class="lead">A quick guide to the six face shapes and the frame styles that flatter each one. Or let the scanner above find yours.</p>
+    <div class="shape-grid" id="shape-grid"></div>
+</main>
+
+<footer>
+    <p><strong style="color:#cbd5e1">FraymFit</strong> · Free face shape scanner and virtual glasses try-on.</p>
+    <p>Size and fit values are camera estimates for guidance only and are not a prescription or medical advice. Camera images are processed on your device and are not stored. Some links are affiliate links: we may earn a commission if you buy, at no extra cost to you.</p>
+</footer>
+
+<script>
+const CONFIG = {
+    ALLOWED_RETURN_HOSTS: ["boutique-eyewear-co.com"],
+    STORES: [],
+    TRACK_URL: "",
+    SAMPLES_NEEDED: 30,
+    SOURCE_TAG: "fraymfit",
+    THRESHOLDS: { oblongRatio: 0.74, roundRatio: 0.82, heartDiff: 0.12, diamondMax: 0.82, squareJaw: 0.85 },
+    SIZE_BREAKS: { smallBelow: 131, largeAbove: 141 },
+    BRIDGE_BREAKS: { narrowBelow: 30, wideAbove: 36 },
+    ENABLE_CARD_CALIBRATION: true,
+    CARD_WIDTH_MM: 85.6,
+    CARD_DEPTH_CORRECTION: 1.03,
+    CUSTOM_FRAMES: []
+};
+
+const qs = new URLSearchParams(location.search);
+const AFF = qs.get("aff");
+
+function parseReturnUrl(raw) {
+    if (!raw) return null;
+    try {
+        const u = new URL(raw);
+        const isLocal = ["localhost", "127.0.0.1"].includes(u.hostname);
+        if (u.protocol !== "https:" && !(u.protocol === "http:" && isLocal)) return null;
+        const allowed = isLocal || CONFIG.ALLOWED_RETURN_HOSTS.some(h => u.hostname === h || u.hostname.endsWith("." + h));
+        return allowed ? u : null;
+    } catch (e) { return null; }
+}
+const RETURN = parseReturnUrl(qs.get("return_url"));
+
+const SV = 'fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"';
+const FRAMES = {
+    rect: { name: "Classic Rectangle", svg: `<svg viewBox="0 0 240 90" ${SV}><rect x="22" y="22" width="80" height="48" rx="5"/><rect x="138" y="22" width="80" height="48" rx="5"/><path d="M102 34 Q120 24 138 34"/><path d="M22 30 L6 24"/><path d="M218 30 L234 24"/></svg>` },
+    round: { name: "Vintage Circular", svg: `<svg viewBox="0 0 240 90" ${SV}><circle cx="62" cy="46" r="34"/><circle cx="178" cy="46" r="34"/><path d="M96 40 Q120 28 144 40"/><path d="M28 40 L8 32"/><path d="M212 40 L232 32"/></svg>` },
+    oval: { name: "Soft Oval", svg: `<svg viewBox="0 0 240 90" ${SV}><ellipse cx="62" cy="46" rx="40" ry="26"/><ellipse cx="178" cy="46" rx="40" ry="26"/><path d="M102 40 Q120 30 138 40"/><path d="M22 42 L6 36"/><path d="M218 42 L234 36"/></svg>` },
+    aviator: { name: "Classic Aviator", svg: `<svg viewBox="0 0 240 90" ${SV}><path d="M22 26 Q62 16 102 26 Q104 66 62 74 Q20 66 22 26 Z"/><path d="M138 26 Q178 16 218 26 Q220 66 178 74 Q136 66 138 26 Z"/><path d="M102 32 Q120 24 138 32"/><path d="M22 26 L6 22"/><path d="M218 26 L234 22"/></svg>` },
+    cateye: { name: "Cat-Eye", svg: `<svg viewBox="0 0 240 90" ${SV}><path d="M18 22 Q60 30 102 38 Q104 64 68 70 Q26 70 18 22 Z"/><path d="M222 22 Q180 30 138 38 Q136 64 172 70 Q214 70 222 22 Z"/><path d="M102 40 Q120 32 138 40"/><path d="M18 22 L4 16"/><path d="M222 22 L236 16"/></svg>` },
+    wayfarer: { name: "Wayfarer", svg: `<svg viewBox="0 0 240 90" ${SV}><path d="M20 24 L102 24 L98 60 Q96 68 88 68 L34 68 Q26 66 24 58 Z"/><path d="M138 24 L220 24 L216 58 Q214 66 206 68 L152 68 Q144 66 142 60 Z"/><path d="M102 32 Q120 26 138 32"/><path d="M20 26 L6 22"/><path d="M220 26 L234 22"/><path d="M20 24 L102 24" stroke-width="10"/><path d="M138 24 L220 24" stroke-width="10"/></svg>` },
+    oversized: { name: "Oversized Square", svg: `<svg viewBox="0 0 240 90" ${SV}><rect x="12" y="8" width="92" height="72" rx="16"/><rect x="136" y="8" width="92" height="72" rx="16"/><path d="M104 34 Q120 26 136 34"/><path d="M12 22 L2 18"/><path d="M228 22 L238 18"/></svg>` }
+};
+
+const SHAPES = {
+    Round: { rec: "Rectangular and angular frames add structure to softer curves.", frames: ["rect", "wayfarer"] },
+    Square: { rec: "Round or oval frames soften a strong jawline.", frames: ["round", "oval"] },
+    Oval: { rec: "A balanced face. Most styles work, try aviator or wayfarer.", frames: ["aviator", "wayfarer"] },
+    Heart: { rec: "Bottom-heavy aviator or oval frames balance a wider forehead.", frames: ["aviator", "oval"] },
+    Diamond: { rec: "Cat-eye or oval frames soften cheekbones and frame the eyes.", frames: ["cateye", "oval"] },
+    Oblong: { rec: "Oversized, tall frames shorten the look of a longer face.", frames: ["oversized", "wayfarer"] }
+};
+
+const MATERIALS = [
+    { id: "black", label: "Black", w: 6 },
+    { id: "steel", label: "Steel", w: 4.5 }
+];
+
+const TINTS = {
+    clear: { label: "Clear", fill: "rgba(150,185,215,.22)", swatch: "#dbe7f1" },
+    light: { label: "Light grey", fill: "rgba(95,95,95,.38)", swatch: "#9a9a9a" },
+    dark: { label: "Dark grey", fill: "rgba(25,25,25,.78)", swatch: "#2b2b2b" }
+};
+let lensTint = "clear";
+const MATW = Object.fromEntries(MATERIALS.map(m => [m.id, m.w]));
+
+function paint(g, material = "black") {
+    const gr = g.createLinearGradient(0, 0, 0, 90);
+    const stops = material === "steel"
+        ? [[0, "#f8fafc"], [.18, "#94a3b8"], [.38, "#f1f5f9"], [.55, "#64748b"], [.78, "#e2e8f0"], [1, "#475569"]]
+        : [[0, "#3a3a3a"], [.3, "#161616"], [.7, "#070707"], [1, "#2a2a2a"]];
+    stops.forEach(([o, col]) => gr.addColorStop(o, col));
+    return gr;
+}
+
+const _shapes = {};
+function parseShape(k) {
+    if (_shapes[k]) return _shapes[k];
+    const doc = new DOMParser().parseFromString(FRAMES[k].svg.replace("<svg ", '<svg xmlns="http://www.w3.org/2000/svg" '), "image/svg+xml");
+    const lens = [], rims = [], arms = [];
+    doc.documentElement.querySelectorAll("*").forEach(e => {
+        const t = e.tagName, n = a => +e.getAttribute(a), d = (e.getAttribute("d") || "").trim();
+        let p = null;
+        if (t === "rect") { p = new Path2D(); p.roundRect ? p.roundRect(n("x"), n("y"), n("width"), n("height"), n("rx") || 0) : p.rect(n("x"), n("y"), n("width"), n("height")); }
+        else if (t === "circle") { p = new Path2D(); p.arc(n("cx"), n("cy"), n("r"), 0, 6.2832); }
+        else if (t === "ellipse") { p = new Path2D(); p.ellipse(n("cx"), n("cy"), n("rx"), n("ry"), 0, 0, 6.2832); }
+        else if (t === "path") p = new Path2D(d);
+        if (!p) return;
+        const sw = e.getAttribute("stroke-width");
+        if (t === "path" && !sw && /^M[\d.]+ [\d.]+ L[\d.]+ [\d.]+$/.test(d)) { const m = d.match(/M([\d.]+) ([\d.]+)/); arms.push({ x: +m[1], y: +m[2] }); }
+        else if (t !== "path" || /Z$/i.test(d)) { lens.push(p); rims.push({ p, w: null }); }
+        else rims.push({ p, w: sw ? +sw : null });
+    });
+    arms.sort((a, b) => a.x - b.x);
+    return _shapes[k] = { lens, rims, arms };
+}
+
+function frontCanvas(f, tint = "clear") {
+    f._front = f._front || {};
+    if (f._front[tint]) return f._front[tint];
+    const c = document.createElement("canvas"); c.width = 960; c.height = 360;
+    const g = c.getContext("2d"); g.scale(4, 4);
+    const S = parseShape(f.shape), mat = f.material, w = MATW[mat];
+    S.lens.forEach(p => {
+        g.save(); g.clip(p);
+        g.fillStyle = TINTS[tint].fill; g.fillRect(0, 0, 240, 90);
+        const gr = g.createLinearGradient(0, 0, 240, 90);
+        [[0, .26], [.14, 0], [.26, .16], [.34, 0], [.62, 0], [.7, .12], [.76, 0]].forEach(([o, a]) => gr.addColorStop(o, `rgba(255,255,255,${a})`));
+        g.fillStyle = gr; g.fillRect(0, 0, 240, 90);
+        g.lineWidth = 4; g.strokeStyle = "rgba(10,25,40,.22)"; g.stroke(p);
+        g.restore();
+    });
+    g.lineCap = g.lineJoin = "round";
+    S.rims.forEach(r => {
+        const lw = r.w ? r.w * w / 6 : w;
+        g.lineWidth = lw + 1.6; g.strokeStyle = "rgba(0,0,0,.28)"; g.stroke(r.p);
+        g.lineWidth = lw; g.strokeStyle = paint(g, mat); g.stroke(r.p);
+        g.save(); g.translate(-lw * .18, -lw * .22); g.lineWidth = Math.max(1, lw * .18); g.strokeStyle = "rgba(255,255,255,.14)"; g.stroke(r.p); g.restore();
+    });
+    return f._front[tint] = c;
+}
+
+const ALL = [];
+Object.keys(FRAMES).forEach(k => MATERIALS.forEach(m => {
+    const f = { key: k + "-" + m.id, name: FRAMES[k].name, shape: k, material: m.id, w: 240, h: 90, lx1: 62 / 240, lx2: 178 / 240, ly: 46 / 90, adj: 1.0, fits: [k] };
+    f.thumb = () => f._th || (f._th = frontCanvas(f).toDataURL());
+    ALL.push(f);
+}));
+CONFIG.CUSTOM_FRAMES.forEach(c => {
+    const img = new Image(); img.crossOrigin = "anonymous"; img.src = c.src;
+    ALL.push({ key: c.key, name: c.name, src: c.src, img, w: 0, h: 0, lx1: c.lens1X ?? 0.27, lx2: c.lens2X ?? 0.73, ly: c.lensY ?? 0.5, adj: 1.0, fits: c.fits || [] });
+});
+
+function track(event, data) {
+    if (!CONFIG.TRACK_URL) return;
+    try { navigator.sendBeacon(CONFIG.TRACK_URL, JSON.stringify({ event, ...data, t: Date.now() })); } catch (e) {}
+}
+
+const $ = id => document.getElementById(id);
+const video = $("webcam"), canvas = $("overlay"), ctx = canvas.getContext("2d");
+let camera = null, mode = "idle";
+let samples = [], result = null, selectedKey = null, smooth = null;
+
+function ui(state) {
+    $("view-consent").classList.toggle("hidden", state !== "consent");
+    $("stage").classList.toggle("hidden", state === "consent" || state === "calib-adjust");
+    $("scan-ui").classList.toggle("hidden", state !== "scan");
+    $("guide").classList.toggle("hidden", state !== "scan");
+    $("tryon-ui").classList.toggle("hidden", state !== "tryon");
+    $("view-result").classList.toggle("hidden", state !== "tryon");
+    $("calib-intro").classList.toggle("hidden", state !== "calib-intro");
+    $("view-calib").classList.toggle("hidden", state !== "calib-adjust");
+    $("stage-title").textContent = state === "scan" ? "Hold still and look straight ahead" : state === "calib-intro" ? "Hold a bank card on your forehead" : "Try them on";
+}
+function setStatus(msg, isErr) { $("status").textContent = msg; $("status").className = isErr ? "error" : ""; }
+const median = arr => { const s = arr.filter(v => v != null).sort((a, b) => a - b); if (!s.length) return null; const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+
+function drawPupils(lm, W, H) {
+    const P = i => ({ x: lm[i].x * W, y: lm[i].y * H }), d = (i, j) => Math.hypot(P(i).x - P(j).x, P(i).y - P(j).y);
+    const a = P(468), b = P(473);
+    ctx.save();
+    ctx.strokeStyle = "#10b981"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.fillStyle = "#10b981"; [a, b].forEach(q => { ctx.beginPath(); ctx.arc(q.x, q.y, 6, 0, 6.283); ctx.fill(); });
+    const irisPx = (d(469, 471) + d(474, 476)) / 2;
+    if (irisPx > 4) {
+        const pd = d(468, 473) * 11.7 / irisPx;
+        if (pd > 45 && pd < 85) {
+            const t = "PD ~" + Math.round(pd) + " mm";
+            ctx.translate((a.x + b.x) / 2, Math.min(a.y, b.y) - 16); ctx.scale(-1, 1);
+            ctx.font = "bold 20px sans-serif"; ctx.textAlign = "center";
+            ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,.65)"; ctx.strokeText(t, 0, 0);
+            ctx.fillStyle = "#fff"; ctx.fillText(t, 0, 0);
+        }
+    }
+    ctx.restore();
+}
+
+function classify(ratio, fore, jaw) {
+    const T = CONFIG.THRESHOLDS;
+    if (ratio < T.oblongRatio) return "Oblong";
+    if (fore - jaw > T.heartDiff && jaw < 0.78) return "Heart";
+    if (fore < T.diamondMax && jaw < T.diamondMax) return "Diamond";
+    if (jaw >= T.squareJaw) return "Square";
+    if (ratio >= T.roundRatio) return "Round";
+    return "Oval";
+}
+const sizeFrom = f => f == null ? null : (f < CONFIG.SIZE_BREAKS.smallBelow ? "Small" : f > CONFIG.SIZE_BREAKS.largeAbove ? "Large" : "Medium");
+const bridgeFrom = b => b == null ? null : (b < CONFIG.BRIDGE_BREAKS.narrowBelow ? "Narrow" : b > CONFIG.BRIDGE_BREAKS.wideAbove ? "Wide" : "Standard");
+
+$("btn-start").onclick = startScan;
+let scanArmed = false, cdTimer = null;
+function armScan() {
+    scanArmed = false; clearInterval(cdTimer);
+    let n = 4; setStatus("Get your face in the oval... " + n);
+    cdTimer = setInterval(() => {
+        n--;
+        if (n > 0) setStatus("Get your face in the oval... " + n);
+        else { clearInterval(cdTimer); scanArmed = true; setStatus("Hold still..."); }
+    }, 1000);
+}
+$("btn-retry").onclick = () => {
+    samples = []; result = null; smooth = null; calibrated = false; $("bar-fill").style.width = "0%";
+    mode = "scan"; ui("scan"); armScan(); $("stage").scrollIntoView({ behavior: "smooth", block: "start" });
+};
+
+function startScan() {
+    track("scan_start");
+    ui("scan");
+    if (typeof FaceMesh === "undefined" || typeof Camera === "undefined") { setStatus("Could not load the face scanner. Check your connection and reload.", true); return; }
+    if (!window.isSecureContext) { setStatus("Camera needs a secure (https) page.", true); return; }
+    samples = []; $("bar-fill").style.width = "0%";
+    if (camera) { mode = "scan"; armScan(); return; }
+
+    setStatus("Starting camera...");
+    const fm = new FaceMesh({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}` });
+    fm.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    fm.onResults(onResults);
+    camera = new Camera(video, { onFrame: async () => { if (mode !== "idle" && mode !== "calibAdjust") await fm.send({ image: video }); }, width: 640, height: 480 });
+    mode = "scan";
+    camera.start().then(() => armScan()).catch(err => {
+        console.error(err); mode = "idle"; camera = null;
+        setStatus("Camera blocked or unavailable (" + err.name + "). Allow camera access in your browser and try again.", true);
+    });
+}
+function stopCamera() {
+    mode = "idle";
+    try { camera && camera.stop(); } catch (e) {}
+    if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
+}
+window.addEventListener("pagehide", stopCamera);
+
+function onResults(res) {
+    if (mode === "idle" || mode === "calibAdjust") return;
+    if (canvas.width !== video.videoWidth) { canvas.width = video.videoWidth; canvas.height = video.videoHeight; }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!res.multiFaceLandmarks || !res.multiFaceLandmarks.length) {
+        if (mode === "tryon" && lastPose && lostFrames++ < 15) drawPose(lastPose);
+        if (mode === "scan") setStatus("No face found. Move into the oval.");
+        if (mode === "calibLive" && captureRequested) { captureRequested = false; $("cal-status").textContent = "No face found. Keep your face in view and try again."; }
+        return;
+    }
+    const lm = res.multiFaceLandmarks[0], W = canvas.width, H = canvas.height;
+
+    if (mode === "tryon") { lostFrames = 0; drawGlasses(lm, W, H); return; }
+    if (mode === "calibLive") { handleCalibLive(res, lm, W, H); return; }
+
+    const dist = (a, b) => Math.hypot((lm[a].x - lm[b].x) * W, (lm[a].y - lm[b].y) * H);
+    ctx.fillStyle = "#10b981";
+    [10, 152, 234, 454, 54, 284, 172, 397].forEach(i => { ctx.beginPath(); ctx.arc(lm[i].x * W, lm[i].y * H, 4, 0, 6.283); ctx.fill(); });
+    if (lm.length >= 478) drawPupils(lm, W, H);
+    if (!scanArmed) return;
+
+    const faceH = dist(10, 152), cheekW = dist(234, 454);
+    const reset = () => { samples = []; $("bar-fill").style.width = "0%"; };
+    if (faceH / H < 0.35) { reset(); setStatus("Move a little closer."); return; }
+    if (Math.abs(lm[1].x - 0.5) > 0.12 || Math.abs(lm[1].y - 0.55) > 0.16) { reset(); setStatus("Centre your face in the oval."); return; }
+    const noseRel = (lm[1].x - lm[234].x) / (lm[454].x - lm[234].x);
+    if (noseRel < 0.4 || noseRel > 0.6) { reset(); setStatus("Face the camera straight on."); return; }
+    setStatus("Hold still...");
+
+    let mm = null;
+    if (lm.length >= 478) {
+        const irisPx = (dist(469, 471) + dist(474, 476)) / 2;
+        if (irisPx > 4) mm = 11.7 / irisPx;
+    }
+    samples.push({
+        ratio: cheekW / faceH, fore: dist(54, 284) / cheekW, jaw: dist(172, 397) / cheekW,
+        face: mm ? cheekW * mm : null, pd: mm ? dist(468, 473) * mm : null,
+        bridge: mm ? dist(133, 362) * mm : null, nose: mm ? dist(129, 358) * mm : null
+    });
+    $("bar-fill").style.width = Math.min(100, samples.length / CONFIG.SAMPLES_NEEDED * 100) + "%";
+    if (samples.length >= CONFIG.SAMPLES_NEEDED) finishScan();
+}
+
+const inRange = (v, lo, hi) => (v != null && v >= lo && v <= hi) ? v : null;
+let lastScan = null, calibrated = false;
+const plausible = m => ({ face: inRange(m.face, 105, 175), pd: inRange(m.pd, 50, 80), bridge: inRange(m.bridge, 22, 45), nose: inRange(m.nose, 25, 50) });
+
+function finishScan() {
+    const ratio = median(samples.map(s => s.ratio)), fore = median(samples.map(s => s.fore)), jaw = median(samples.map(s => s.jaw));
+    const meas = plausible({
+        face: median(samples.map(s => s.face)), pd: median(samples.map(s => s.pd)),
+        bridge: median(samples.map(s => s.bridge)), nose: median(samples.map(s => s.nose))
+    });
+    const shape = classify(ratio, fore, jaw);
+    lastScan = { shape, ratio, fore, jaw };
+    calibrated = false;
+    renderResult(meas);
+    track("scan_complete", { shape: result.shape, size: result.size });
+    renderPicker(SHAPES[shape].frames);
+    smooth = null; mode = "tryon"; ui("tryon");
+
+    if (RETURN && window.parent !== window) {
+        window.parent.postMessage({ type: "fraymfit:result", ...result }, RETURN.origin);
+    }
+}
+
+const isRec = (f, rec) => f.fits.some(x => rec.includes(x));
+function renderPicker(rec) {
+    const sorted = [...ALL].sort((a, b) => isRec(b, rec) - isRec(a, rec));
+    selectedKey = sorted[0].key;
+    $("picker").innerHTML = sorted.map(f =>
+        `<button class="pick ${isRec(f, rec) ? "rec" : ""} ${f.key === selectedKey ? "sel" : ""}" data-k="${f.key}">` +
+        (isRec(f, rec) ? "<em>Best for you</em>" : "") + `<img src="${f.thumb ? f.thumb() : f.src}" alt="">` + `<span>${f.name}</span></button>`).join("");
+    $("picker").querySelectorAll(".pick").forEach(b => b.onclick = () => {
+        selectedKey = b.dataset.k;
+        $("picker").querySelectorAll(".pick").forEach(x => x.classList.toggle("sel", x === b));
+    });
+}
+
+let lastPose = null, lostFrames = 0;
+const sm = (o, n, k = 0.5) => { if (!o) return n; const r = {}; for (const key in n) r[key] = o[key] + (n[key] - o[key]) * k; return r; };
+
+function drawGlasses(lm, W, H) {
+    let a, b;
+    if (lm.length >= 478) { a = lm[468]; b = lm[473]; }
+    else { a = { x: (lm[33].x + lm[133].x) / 2, y: (lm[33].y + lm[133].y) / 2 }; b = { x: (lm[362].x + lm[263].x) / 2, y: (lm[362].y + lm[263].y) / 2 }; }
+    if (a.x > b.x) { const t = a; a = b; b = t; }
+    const P = i => ({ x: lm[i].x * W, y: lm[i].y * H });
+    let L = [234, 127], R = [454, 356];
+    if (lm[234].x > lm[454].x) { L = [454, 356]; R = [234, 127]; }
+    const cheek = Math.hypot(P(234).x - P(454).x, P(234).y - P(454).y);
+    const t = Math.max(-1, Math.min(1, (lm[R[0]].z - lm[L[0]].z) * W / cheek));
+    const noseOff = (lm[1].x - (lm[L[0]].x + lm[R[0]].x) / 2) * W;
+    const ear = (ids, dir) => {
+        const o = P(ids[0]), i = P(ids[1]);
+        return { x: o.x * 0.7 + i.x * 0.3 + dir * cheek * 0.16, y: o.y * 0.7 + i.y * 0.3 };
+    };
+    const eL = ear(L, -1), eR = ear(R, 1);
+    const ax = a.x * W, ay = a.y * H, bx = b.x * W, by = b.y * H;
+    const prev = smooth;
+    lastPose = smooth = sm(prev, {
+        cx: (ax + bx) / 2 + noseOff * 0.15, cy: (ay + by) / 2, ang: Math.atan2(by - ay, bx - ax), pd: Math.hypot(bx - ax, by - ay),
+        t, lx: eL.x, ly: eL.y, rx: eR.x, ry: eR.y
+    }, 0.4);
+    if (prev) smooth.t = prev.t + (t - prev.t) * 0.15;
+    drawPose(smooth);
+}
+
+function drawPose(p) {
+    const f = ALL.find(x => x.key === selectedKey);
+    if (!f) return;
+    const custom = !f.shape;
+    if (custom && (!f.img.complete || !f.img.naturalWidth)) return;
+    const w = f.w || f.img.naturalWidth, h = f.h || f.img.naturalHeight;
+    const s = p.pd * f.adj * parseFloat($("size-slider").value) / ((f.lx2 - f.lx1) * w);
+    const cosY = Math.max(0.5, Math.sqrt(1 - p.t * p.t));
+    const midX = (f.lx1 + f.lx2) / 2 * w, midY = f.ly * h;
+
+    ctx.save();
+    ctx.translate(p.cx, p.cy); ctx.rotate(p.ang); ctx.scale(s * cosY, s); ctx.translate(-midX, -midY);
+    if (custom) { ctx.drawImage(f.img, 0, 0, w, h); ctx.restore(); return; }
+
+    const c = Math.cos(-p.ang), sn = Math.sin(-p.ang);
+    const toLocal = (x, y) => { const dx = x - p.cx, dy = y - p.cy; return { x: (dx * c - dy * sn) / (s * cosY) + midX, y: (dx * sn + dy * c) / s + midY }; };
+    const turn = Math.max(0, Math.min(1, (Math.abs(p.t) - 0.02) / 0.28));
+    const turnSmooth = turn * turn * (3 - 2 * turn);
+    const nearAlpha = 0.78 + 0.22 * turnSmooth;
+    const farAlpha = 0.78 - 0.40 * turnSmooth;
+    const arms = parseShape(f.shape).arms;
+    const leftAlpha = p.t > 0 ? nearAlpha : farAlpha;
+    const rightAlpha = p.t > 0 ? farAlpha : nearAlpha;
+    [[arms[0], toLocal(p.lx, p.ly), leftAlpha, -1], [arms[1], toLocal(p.rx, p.ry), rightAlpha, 1]].forEach(([hinge, end, alpha, dir]) => {
+        if (!hinge || alpha <= 0) return;
+        end.x = dir < 0 ? Math.min(end.x, hinge.x - 6) : Math.max(end.x, hinge.x + 6);
+        ctx.save(); ctx.globalAlpha = alpha; ctx.lineCap = "round";
+        ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = 6;
+        const mx = (hinge.x + end.x) / 2, my = (hinge.y + end.y) / 2 + 2, N = 16, thick = 9, thin = 4, L = [], Rr = [];
+        for (let i = 0; i <= N; i++) {
+            const u = i / N, v = 1 - u;
+            const x = v * v * hinge.x + 2 * v * u * mx + u * u * end.x, y = v * v * hinge.y + 2 * v * u * my + u * u * end.y;
+            const tx = 2 * v * (mx - hinge.x) + 2 * u * (end.x - mx), ty = 2 * v * (my - hinge.y) + 2 * u * (end.y - my), n = Math.hypot(tx, ty) || 1;
+            const hw = (thick + (thin - thick) * u) / 2;
+            L.push([x - ty / n * hw, y + tx / n * hw]); Rr.push([x + ty / n * hw, y - tx / n * hw]);
+        }
+        ctx.beginPath(); ctx.moveTo(L[0][0], L[0][1]);
+        L.forEach(q => ctx.lineTo(q[0], q[1])); Rr.reverse().forEach(q => ctx.lineTo(q[0], q[1])); ctx.closePath();
+        ctx.fillStyle = paint(ctx, f.material); ctx.fill();
+        ctx.restore();
+    });
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(frontCanvas(f, lensTint), 0, 0, 240, 90);
+    ctx.restore();
+}
+
+function renderResult(meas) {
+    const { shape, ratio, fore, jaw } = lastScan;
+    const size = sizeFrom(meas.face), bridgeFit = bridgeFrom(meas.bridge);
+    result = { shape: shape.toLowerCase(), frames: SHAPES[shape].frames, size: size && size.toLowerCase(), bridge: bridgeFit && bridgeFit.toLowerCase() };
+    $("res-shape").textContent = shape + " face";
+    $("res-rec").textContent = SHAPES[shape].rec;
+    const tile = (label, val) => `<div class="tile"><small>${label}</small><strong>${val}</strong></div>`;
+    $("res-tiles").innerHTML =
+        tile("Frame size", size ? `${size} (~${Math.round(meas.face)} mm)` : "n/a") +
+        tile("Pupil distance", meas.pd ? `~${Math.round(meas.pd)} mm` : "n/a") +
+        tile("Bridge fit", bridgeFit || "n/a") +
+        tile("Nose width", meas.nose ? `~${Math.round(meas.nose)} mm` : "n/a");
+    $("res-metrics").textContent = `${calibrated ? "Card-calibrated" : "Camera estimate"} | w/h ${ratio.toFixed(2)} | forehead ${fore.toFixed(2)} | jaw ${jaw.toFixed(2)}`;
+    $("btn-return").classList.toggle("hidden", !RETURN);
+    $("btn-calib").classList.toggle("hidden", !CONFIG.ENABLE_CARD_CALIBRATION || calibrated);
+    renderShop();
+}
+
+function renderShop() {
+    const show = !RETURN && CONFIG.STORES.length > 0 && result;
+    $("shop-box").classList.toggle("hidden", !show);
+    if (!show) return;
+    const frameNames = result.frames.map(k => FRAMES[k].name).join(" or ");
+    $("shop-sub").textContent = `For your ${result.shape} face, look for ${frameNames}.` + (result.size ? ` Your estimated size is ${result.size}.` : "");
+    $("shop-links").innerHTML = "";
+    CONFIG.STORES.forEach(st => {
+        let href;
+        try {
+            const u = new URL(st.url);
+            u.searchParams.set("filter_shape", result.shape);
+            u.searchParams.set("filter_frames", result.frames.join(","));
+            if (result.size) u.searchParams.set("filter_size", result.size);
+            if (result.bridge) u.searchParams.set("filter_bridge", result.bridge);
+            u.searchParams.set("src", CONFIG.SOURCE_TAG);
+            href = u.toString();
+        } catch (e) { return; }
+        const a = document.createElement("a");
+        a.className = "btn green"; a.href = href; a.target = "_blank"; a.rel = "noopener sponsored";
+        a.innerHTML = `Shop at ${st.name}` + (st.blurb ? `<span class="shop-blurb">${st.blurb}</span>` : "");
+        a.addEventListener("click", () => track("store_click", { store: st.name, shape: result.shape, size: result.size }));
+        $("shop-links").appendChild(a);
+    });
+}
+
+let captureRequested = false, calib = null;
+const baseCanvas = document.createElement("canvas");
+const snap = $("snap"), sctx = snap.getContext("2d");
+
+$("btn-calib").onclick = () => {
+    captureRequested = false; calib = null;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    $("cal-status").textContent = "Hold the card flat against your forehead, then press Capture.";
+    mode = "calibLive"; ui("calib-intro");
+};
+$("btn-capture").onclick = () => { captureRequested = true; $("cal-status").textContent = "Capturing..."; };
+$("btn-cal-cancel").onclick = exitCalib;
+function exitCalib() {
+    captureRequested = false; smooth = null;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    mode = "tryon"; ui("tryon");
+}
+
+function handleCalibLive(res, lm, W, H) {
+    if (lm.length >= 478) {
+        ctx.fillStyle = "#10b981";
+        [468, 473].forEach(i => { ctx.beginPath(); ctx.arc(lm[i].x * W, lm[i].y * H, 4, 0, 6.283); ctx.fill(); });
+    }
+    if (!captureRequested) return;
+    captureRequested = false;
+    if (lm.length < 478) { $("cal-status").textContent = "Eye tracking is not available on this device."; return; }
+    const sw = video.videoWidth, sh = video.videoHeight;
+    baseCanvas.width = sw; baseCanvas.height = sh;
+    const b = baseCanvas.getContext("2d");
+    b.save(); b.translate(sw, 0); b.scale(-1, 1); b.drawImage(res.image || video, 0, 0, sw, sh); b.restore();
+    snap.width = sw; snap.height = sh;
+    calib = { lm, sw, sh };
+    const cx = (1 - lm[10].x) * sw;
+    ["cal-l", "cal-r"].forEach(id => { $(id).min = 0; $(id).max = sw; });
+    $("cal-l").value = cx - 0.12 * sw; $("cal-r").value = cx + 0.12 * sw;
+    $("cal-msg").textContent = "";
+    mode = "calibAdjust"; ui("calib-adjust"); drawSnap();
+}
+
+function drawSnap() {
+    if (!calib) return;
+    const { lm, sw, sh } = calib;
+    sctx.drawImage(baseCanvas, 0, 0);
+    sctx.fillStyle = "#10b981";
+    [468, 473].forEach(i => { sctx.beginPath(); sctx.arc((1 - lm[i].x) * sw, lm[i].y * sh, 5, 0, 6.283); sctx.fill(); });
+    sctx.strokeStyle = "#facc15"; sctx.lineWidth = 2;
+    [+$("cal-l").value, +$("cal-r").value].forEach(x => { sctx.beginPath(); sctx.moveTo(x, 0); sctx.lineTo(x, sh); sctx.stroke(); });
+}
+["cal-l", "cal-r"].forEach(id => $(id).addEventListener("input", drawSnap));
+document.querySelectorAll("[data-nudge]").forEach(btn => btn.onclick = () => {
+    const el = $(btn.dataset.target); el.value = +el.value + +btn.dataset.nudge; drawSnap();
+});
+$("btn-cal-retake").onclick = () => {
+    calib = null; captureRequested = false;
+    $("cal-status").textContent = "Hold the card flat against your forehead, then press Capture.";
+    mode = "calibLive"; ui("calib-intro");
+};
+$("btn-cal-confirm").onclick = () => {
+    if (!calib) return;
+    const { lm, sw, sh } = calib;
+    const cardPx = Math.abs(+$("cal-r").value - +$("cal-l").value);
+    if (cardPx < sw * 0.08 || cardPx > sw * 0.6) { $("cal-msg").textContent = "The lines look too close together or too far apart. Line them up with the card's left and right edges."; return; }
+    const mmPerPx = CONFIG.CARD_WIDTH_MM / cardPx * CONFIG.CARD_DEPTH_CORRECTION;
+    const d = (a, b) => Math.hypot((lm[a].x - lm[b].x) * sw, (lm[a].y - lm[b].y) * sh);
+    const meas = plausible({ face: d(234, 454) * mmPerPx, pd: d(468, 473) * mmPerPx, bridge: d(133, 362) * mmPerPx, nose: d(129, 358) * mmPerPx });
+    if (!meas.pd && !meas.face) { $("cal-msg").textContent = "Those measurements look unrealistic. Check the lines sit on the card edges, or retake the photo."; return; }
+    calibrated = true;
+    renderResult(meas);
+    exitCalib();
+};
+
+$("btn-return").onclick = () => {
+    if (!RETURN || !result) return;
+    const u = new URL(RETURN.toString());
+    u.searchParams.set("filter_shape", result.shape);
+    u.searchParams.set("filter_frames", result.frames.join(","));
+    if (result.size) u.searchParams.set("filter_size", result.size);
+    if (result.bridge) u.searchParams.set("filter_bridge", result.bridge);
+    u.searchParams.set("src", CONFIG.SOURCE_TAG);
+    if (AFF) u.searchParams.set("aff", AFF);
+    stopCamera();
+    (window.top || window).location.href = u.toString();
+};
+
+(function buildGuide() {
+    const g = document.getElementById("shape-grid"); if (!g) return;
+    const desc = { Round: "Soft width, short length", Square: "Strong, wide jawline", Oval: "Balanced, gently tapered", Heart: "Wider forehead, narrower chin", Diamond: "Wide cheekbones, narrow brow and jaw", Oblong: "Long, narrow face" };
+    g.innerHTML = Object.keys(SHAPES).map(k =>
+        `<div class="shape-card"><h3>${k} face</h3><p class="d">${desc[k]}</p><p class="r">${SHAPES[k].rec}</p>` +
+        `<div class="fr">${SHAPES[k].frames.map(f => `<div>${FRAMES[f].svg}<span>${FRAMES[f].name}</span></div>`).join("")}</div></div>`).join("");
+})();
+
+(function buildTints() {
+    const box = $("tints");
+    box.innerHTML = Object.keys(TINTS).map(k => `<button class="tint ${k === lensTint ? "sel" : ""}" data-t="${k}"><i style="background:${TINTS[k].swatch}"></i>${TINTS[k].label}</button>`).join("");
+    box.querySelectorAll(".tint").forEach(b => b.onclick = () => {
+        lensTint = b.dataset.t;
+        box.querySelectorAll(".tint").forEach(x => x.classList.toggle("sel", x === b));
+    });
+})();
+</script>
+</body>
+</html>
